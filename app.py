@@ -7,6 +7,7 @@ Endpoints:
 """
 
 import os
+import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -47,6 +48,32 @@ GUARDRAIL_REFUSAL = (
     "For legal and compliance reasons, I cannot provide "
     "new medical diagnoses or recommend medication changes. "
     "Please consult the attending physician."
+)
+
+MEDICAL_ADVICE_TERMS = (
+    "recommend",
+    "suggest",
+    "prescribe",
+    "increase",
+    "decrease",
+    "change",
+    "adjust",
+    "best treatment",
+    "should take",
+    "should",
+)
+
+MEDICATION_TERMS = (
+    "medication",
+    "medications",
+    "medicine",
+    "medicines",
+    "drug",
+    "drugs",
+    "dose",
+    "dosage",
+    "treatment",
+    "therapy",
 )
 
 
@@ -169,6 +196,29 @@ def _guardrail_content(response) -> str:
     return str(getattr(response, "content", "") or "")
 
 
+def _is_medical_advice_request(query: str) -> bool:
+    """Return true for treatment requests while allowing record lookups."""
+
+    normalized_query = re.sub(r"\s+", " ", query.lower()).strip()
+    has_advice_term = any(term in normalized_query for term in MEDICAL_ADVICE_TERMS)
+    has_medication_term = any(term in normalized_query for term in MEDICATION_TERMS)
+    return has_advice_term and has_medication_term
+
+
+def _is_guardrail_refusal(text: str) -> bool:
+    """Recognize configured and equivalent refusal responses."""
+
+    normalized_text = re.sub(r"\s+", " ", text.lower()).strip()
+    return (
+        GUARDRAIL_REFUSAL.lower() in normalized_text
+        or (
+            "cannot" in normalized_text
+            and any(term in normalized_text for term in ("suggest", "recommend", "prescribe"))
+            and any(term in normalized_text for term in MEDICATION_TERMS)
+        )
+    )
+
+
 def _structured_answer(sources: list[SourceRecord]) -> str:
     """Provide a useful local answer when remote LLM synthesis is unavailable."""
 
@@ -246,7 +296,7 @@ async def post_query(payload: QueryRequest):
         )
 
     # If guardrail returned the refusal message → block immediately
-    if GUARDRAIL_REFUSAL.lower() in guardrail_text.lower():
+    if _is_guardrail_refusal(guardrail_text) or _is_medical_advice_request(user_query):
         return QueryResponse(
             allowed=False,
             message=GUARDRAIL_REFUSAL,
