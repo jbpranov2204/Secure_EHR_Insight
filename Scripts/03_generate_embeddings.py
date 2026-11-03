@@ -100,7 +100,7 @@ def generate_and_store_embeddings():
 
     print("\n⏳ Loading local BioClinical ModernBERT model...")
     print(f"   Model: {MODEL_NAME}")
-
+    
     model = SentenceTransformer(MODEL_NAME)
 
     # --------------------------------------------------------
