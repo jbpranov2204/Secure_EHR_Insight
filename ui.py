@@ -40,6 +40,11 @@ html, body, [class*="css"] {
     font-family: 'Inter', sans-serif;
 }
 
+/* Hide the Streamlit toolbar menu. */
+div[data-testid="stToolbar"] {
+    display: none;
+}
+
 /* ── Main background ── */
 .stApp {
     background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 50%, #16213e 100%);
@@ -530,5 +535,11 @@ if prompt := st.chat_input("Ask a clinical query regarding this patient..."):
                     "🔌 Cannot connect to the backend API. "
                     "Please start the server with: `uvicorn app:app --reload`"
                 )
+            except requests.exceptions.HTTPError as e:
+                try:
+                    error_detail = e.response.json().get("detail", e.response.text)
+                except (ValueError, AttributeError):
+                    error_detail = str(e)
+                st.error(f"❌ Backend error: {error_detail}")
             except Exception as e:
                 st.error(f"❌ Error: {e}")
